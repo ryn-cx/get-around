@@ -1,0 +1,16 @@
+[project]
+name = "get-around"
+version = "0.1.0"
+description = "httpx wrapper with custom proxy support"
+readme = "README.md"
+authors = [
+    { name = "ryn-cx", email = "262888154+ryn-cx@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "httpx>=0.28.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
