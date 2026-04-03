@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from copy_params import copy_method_params
+
 
 class GetAroundError(Exception):
     """Raised when the proxy server itself returns an error."""
@@ -15,16 +17,15 @@ class GetAroundError(Exception):
 class GetAround:
     """HTTP client that routes requests through a proxy server."""
 
-    def __init__(self, server: str, password: str) -> None:
+    def __init__(self, server: str | None = None, password: str | None = None) -> None:
         self.server = server
         self.password = password
 
-    def _proxy_request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        """Send a request through the proxy and return a reconstructed Response."""
-        proxy_payload: dict[str, Any] = {
-            "url": url,
-            "method": method.upper(),
-        }
+    def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        if self.server is None:
+            return httpx.request(method, url, **kwargs)
+
+        proxy_payload: dict[str, Any] = {"url": url, "method": method.upper()}
 
         if "headers" in kwargs:
             proxy_payload["headers"] = kwargs.pop("headers")
@@ -42,6 +43,9 @@ class GetAround:
             proxy_payload["auth"] = kwargs.pop("auth")
 
         timeout = kwargs.pop("timeout", 60)
+
+        assert self.server is not None
+        assert self.password is not None
 
         proxy_response = httpx.post(
             self.server,
@@ -66,23 +70,34 @@ class GetAround:
             headers={"Content-Type": "application/json"},
         )
 
+    @copy_method_params(httpx.Client.request)
+    def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        return self._request(method, url, **kwargs)
+
+    @copy_method_params(httpx.Client.get)
     def get(self, url: str, **kwargs: Any) -> httpx.Response:
-        return self._proxy_request("GET", url, **kwargs)
+        return self._request("GET", url, **kwargs)
 
+    @copy_method_params(httpx.Client.post)
     def post(self, url: str, **kwargs: Any) -> httpx.Response:
-        return self._proxy_request("POST", url, **kwargs)
+        return self._request("POST", url, **kwargs)
 
+    @copy_method_params(httpx.Client.put)
     def put(self, url: str, **kwargs: Any) -> httpx.Response:
-        return self._proxy_request("PUT", url, **kwargs)
+        return self._request("PUT", url, **kwargs)
 
+    @copy_method_params(httpx.Client.patch)
     def patch(self, url: str, **kwargs: Any) -> httpx.Response:
-        return self._proxy_request("PATCH", url, **kwargs)
+        return self._request("PATCH", url, **kwargs)
 
+    @copy_method_params(httpx.Client.delete)
     def delete(self, url: str, **kwargs: Any) -> httpx.Response:
-        return self._proxy_request("DELETE", url, **kwargs)
+        return self._request("DELETE", url, **kwargs)
 
+    @copy_method_params(httpx.Client.head)
     def head(self, url: str, **kwargs: Any) -> httpx.Response:
-        return self._proxy_request("HEAD", url, **kwargs)
+        return self._request("HEAD", url, **kwargs)
 
+    @copy_method_params(httpx.Client.options)
     def options(self, url: str, **kwargs: Any) -> httpx.Response:
-        return self._proxy_request("OPTIONS", url, **kwargs)
+        return self._request("OPTIONS", url, **kwargs)
