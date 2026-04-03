@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from copy_params import copy_method_params
+from get_around.copy_params import copy_method_params
 
 
 class GetAroundError(Exception):
@@ -32,7 +32,7 @@ class GetAround:
         if "json" in kwargs:
             proxy_payload["data"] = kwargs.pop("json")
         if "data" in kwargs:
-            proxy_payload["data"] = kwargs.pop("data")
+            proxy_payload["form"] = kwargs.pop("data")
         if "params" in kwargs:
             proxy_payload["params"] = kwargs.pop("params")
         if "cookies" in kwargs:
@@ -50,7 +50,7 @@ class GetAround:
         proxy_response = httpx.post(
             self.server,
             json=proxy_payload,
-            headers={"X-Auth-Token": self.password},
+            headers={"Authorization": f"Bearer {self.password}"},
             timeout=timeout,
         )
 
@@ -67,7 +67,7 @@ class GetAround:
         return httpx.Response(
             status_code=proxy_result["statusCode"],
             content=body.encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=proxy_result["headers"],
         )
 
     @copy_method_params(httpx.Client.request)
