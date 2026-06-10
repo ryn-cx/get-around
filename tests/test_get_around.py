@@ -57,10 +57,11 @@ class TestPost:
         direct = httpx.post("https://httpbin.org/post", json={"key": "value"})
         assert_json_responses_match(proxied, direct)
 
-    def test_post_data(self, client: GetAround) -> None:
+    def test_post_form_data(self, client: GetAround) -> None:
         proxied = client.post("https://httpbin.org/post", data={"field": "data"})
         direct = httpx.post("https://httpbin.org/post", data={"field": "data"})
         assert_json_responses_match(proxied, direct)
+
 
 
     def test_post_with_cookies(self, client: GetAround) -> None:
@@ -71,6 +72,13 @@ class TestPost:
     def test_post_content(self, client: GetAround) -> None:
         proxied = client.post("https://httpbin.org/post", content="raw body")
         direct = httpx.post("https://httpbin.org/post", content="raw body")
+        assert_json_responses_match(proxied, direct)
+
+
+class TestAuth:
+    def test_basic_auth(self, client: GetAround) -> None:
+        proxied = client.get("https://httpbin.org/basic-auth/user/pass", auth=("user", "pass"))
+        direct = httpx.get("https://httpbin.org/basic-auth/user/pass", auth=("user", "pass"))
         assert_json_responses_match(proxied, direct)
 
 
