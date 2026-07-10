@@ -41,5 +41,6 @@ def build_client(
 ) -> GetAround:
     return GetAround(
         server=get_credential("GET_AROUND_SERVER", service, env_file),
-        password=get_credential("GET_AROUND_PASSWORD", service, env_file),
+        client_id=get_credential("CF_ACCESS_CLIENT_ID", service, env_file),
+        client_secret=get_credential("CF_ACCESS_CLIENT_SECRET", service, env_file),
     )

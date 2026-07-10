@@ -1,19 +1,17 @@
-# get-around
+# Get Around
 
 A drop-in [httpx](https://www.python-httpx.org/) wrapper that transparently routes
-requests through a custom proxy server.
+requests through a cloudflare worker based relay server.
 
 `GetAround` mirrors httpx's request API (`get`, `post`, `put`, `patch`, `delete`,
-`head`, `options`, `request`) and returns standard `httpx.Response` objects. When
-configured with a proxy `server` and `password`, requests are forwarded through that
-server; when no server is set, requests are sent directly.
+`head`, `options`, `request`) and returns standard `httpx.Response` objects.
 
 ## Proxy server
 
-The `server` you pass to `GetAround` is a companion proxy that receives each request,
-forwards it on your behalf, and returns the response. The server is available
-at[ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server). Deploy it,
-set a password, and point `GetAround` at its URL to route your traffic through it.
+The `server` you pass to `GetAround` is a cloudflare worker running
+[ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server) and the
+`client_id` and `client_secret` are the service tokens to access the worker. For more
+information see [ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server).
 
 ## Installation
 
@@ -22,18 +20,26 @@ uv add git+https://github.com/ryn-cx/get-around.git
 ```
 
 ## Usage
-
 ```python
 from get_around import GetAround
 
-# Route requests through a proxy server
-client = GetAround(server="https://proxy-server", password="password")
+# Route requests through get-around-server, (this can also include additional kwargs for httpx.Client).
+client = GetAround(
+    server="https://get-around-server",
+    client_id="<service-token-client-id>",
+    client_secret="<service-token-client-secret>",
+)
 
-response = client.get("https://httpbin.org/get", params={"foo": "bar"})
 
-# POST with a JSON body
-response = client.post("https://httpbin.org/post", json={"key": "value"})
+# Every method matches httpx's signature and returns an httpx.Response.
+response = client.get("https://postman-echo.com/get", params={"foo": "bar"})
+response = client.post("https://postman-echo.com/post", json={"key": "value"})
+response = client.put("https://postman-echo.com/put", json={"key": "value"})
+response = client.patch("https://postman-echo.com/patch", json={"key": "value"})
+response = client.delete("https://postman-echo.com/delete")
+response = client.head("https://postman-echo.com/get")
+response = client.options("https://postman-echo.com/get")
+response = client.request("GET", "https://postman-echo.com/get")
+
+
 ```
-
-Upstream HTTP errors (404, 500, etc.) are returned as normal responses, not raised.
-Check `response.status_code` as you would with `httpx`.
