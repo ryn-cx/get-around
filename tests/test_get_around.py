@@ -51,6 +51,20 @@ class TestGet:
         assert_json_responses_match(proxied, direct)
 
 
+class TestCompression:
+    def test_gzip(self, client: GetAround) -> None:
+        proxied = client.get("https://httpbin.org/gzip")
+        direct = httpx.get("https://httpbin.org/gzip")
+        assert_json_responses_match(proxied, direct)
+        assert proxied.json()["gzipped"] is True
+
+    def test_deflate(self, client: GetAround) -> None:
+        proxied = client.get("https://httpbin.org/deflate")
+        direct = httpx.get("https://httpbin.org/deflate")
+        assert_json_responses_match(proxied, direct)
+        assert proxied.json()["deflated"] is True
+
+
 class TestPost:
     def test_post_json(self, client: GetAround) -> None:
         proxied = client.post("https://httpbin.org/post", json={"key": "value"})

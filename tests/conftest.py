@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import os
+from pathlib import Path
 
 import pytest
-from dotenv import load_dotenv
 
 from get_around import GetAround
+from get_around.testing import build_client
 
-load_dotenv()
+ENV_FILE = Path(__file__).parent.parent / ".env"
 
 
 @pytest.fixture
 def client() -> GetAround:
-    server = os.environ["GET_AROUND_SERVER"]
-    password = os.environ["GET_AROUND_PASSWORD"]
-    return GetAround(server=server, password=password)
+    return build_client("get-around", ENV_FILE)
