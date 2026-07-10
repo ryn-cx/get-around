@@ -149,7 +149,22 @@ class TestUpstreamErrors:
 
 
 class TestProxyErrors:
-    def test_bad_password(self) -> None:
-        client = GetAround(server="https://server.example", password="wrong")
+    def test_bad_password(self, server_url: str) -> None:
+        client = GetAround(server=server_url, password="wrong")
         with pytest.raises(GetAroundError):
             client.get("https://httpbin.org/get")
+
+
+class TestHttpProxy:
+    def test_server_and_proxy_are_mutually_exclusive(self) -> None:
+        with pytest.raises(ValueError, match="not both"):
+            GetAround(server="https://example.com", proxy="http://127.0.0.1:8080")
+
+    def test_password_and_proxy_are_mutually_exclusive(self) -> None:
+        with pytest.raises(ValueError, match="not both"):
+            GetAround(password="secret", proxy="http://127.0.0.1:8080")
+
+    def test_proxy_routes_through_configured_proxy(self) -> None:
+        client = GetAround(proxy="http://127.0.0.1:1")
+        with pytest.raises(httpx.HTTPError):
+            client.get("https://httpbin.org/get", timeout=5)
