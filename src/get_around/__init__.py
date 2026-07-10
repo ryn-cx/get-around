@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from typing import Any
 
@@ -61,13 +62,23 @@ class GetAround:
         proxy_result = proxy_response.json()
 
         body = proxy_result["body"]
-        if not isinstance(body, str):
-            body = json.dumps(body)
+        if proxy_result.get("encoding") == "base64":
+            content = base64.b64decode(body)
+        elif isinstance(body, str):
+            content = body.encode("utf-8")
+        else:
+            content = json.dumps(body).encode("utf-8")
+
+        headers = {
+            key: value
+            for key, value in proxy_result["headers"].items()
+            if key.lower() != "content-length"
+        }
 
         return httpx.Response(
             status_code=proxy_result["statusCode"],
-            content=body.encode("utf-8"),
-            headers=proxy_result["headers"],
+            content=content,
+            headers=headers,
         )
 
     @copy_method_params(httpx.Client.request)
