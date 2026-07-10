@@ -12,4 +12,4 @@ ENV_FILE = Path(__file__).parent.parent / ".env"
 
 @pytest.fixture
 def client() -> GetAround:
-    return build_client("get-around", ENV_FILE)
+    return build_client(env_file=ENV_FILE)

@@ -6,6 +6,8 @@ import keyring
 
 from get_around import GetAround
 
+KEYRING_SERVICE = "get-around"
+
 
 def _env_file_values(env_file: Path) -> dict[str, str]:
     values: dict[str, str] = {}
@@ -20,7 +22,11 @@ def _env_file_values(env_file: Path) -> dict[str, str]:
     return values
 
 
-def get_credential(name: str, service: str, env_file: Path | None = None) -> str:
+def get_credential(
+    name: str,
+    service: str = KEYRING_SERVICE,
+    env_file: Path | None = None,
+) -> str:
     env_path = env_file if env_file is not None else Path.cwd() / ".env"
     value = keyring.get_password(service, name) or _env_file_values(env_path).get(name)
     if value is None:
@@ -29,7 +35,10 @@ def get_credential(name: str, service: str, env_file: Path | None = None) -> str
     return value
 
 
-def build_client(service: str, env_file: Path | None = None) -> GetAround:
+def build_client(
+    service: str = KEYRING_SERVICE,
+    env_file: Path | None = None,
+) -> GetAround:
     return GetAround(
         server=get_credential("GET_AROUND_SERVER", service, env_file),
         password=get_credential("GET_AROUND_PASSWORD", service, env_file),
