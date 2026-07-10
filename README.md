@@ -6,12 +6,13 @@ requests through a cloudflare worker based relay server.
 `GetAround` mirrors httpx's request API (`get`, `post`, `put`, `patch`, `delete`,
 `head`, `options`, `request`) and returns standard `httpx.Response` objects.
 
-## Proxy server
+## Relay server
 
 The `server` you pass to `GetAround` is a cloudflare worker running
-[ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server) and the
-`client_id` and `client_secret` are the service tokens to access the worker. For more
-information see [ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server).
+[ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server) and
+the `client_id` and `client_secret` are the Cloudflare Access service tokens used to reach
+the worker. For more information see
+[ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server).
 
 ## Installation
 
@@ -23,9 +24,9 @@ uv add git+https://github.com/ryn-cx/get-around.git
 ```python
 from get_around import GetAround
 
-# Route requests through get-around-server, (this can also include additional kwargs for httpx.Client).
+# Route requests through the get-around-server relay, (this can also include additional kwargs for httpx.Client).
 client = GetAround(
-    server="https://get-around-server",
+    server="https://<your-worker>.workers.dev",
     client_id="<service-token-client-id>",
     client_secret="<service-token-client-secret>",
 )

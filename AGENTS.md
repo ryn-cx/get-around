@@ -23,13 +23,12 @@ and the rest of your code never has to know the difference.
   parameters, so autocomplete and type checking on `client.post(...)` are as rich as
   httpx's own — while the implementation just forwards `**kwargs`.
 - **Auth that just travels.** Hand it httpx-style `auth` — a `(user, pass)` tuple, an
-  `httpx.Auth`, or a callable — and it's normalized and baked into the request before it's
-  serialized across the wire, so Basic auth and friends work through the proxy untouched.
+  `httpx.Auth`, or a callable — and it's forwarded straight through to httpx, so Basic auth
+  and friends work through the relay untouched.
 - **Compression handled for free.** gzip and deflate responses come back transparently
   decoded, exactly as httpx would give them to you — verified by the test suite.
 - **Errors that stay honest.** Upstream `404`s and `500`s come back as normal responses,
-  just like httpx. Only a failure in the *proxy infrastructure itself* raises
-  `GetAroundError` — so you never confuse "the site said no" with "the proxy broke."
+  just like httpx — the relay never turns a site's rejection into an exception.
 
 ## One import away
 
@@ -56,8 +55,8 @@ response = client.get("https://httpbin.org/get")
 ```
 
 The Cloudflare proxy mode talks to its companion Worker,
-[get-around-server](https://github.com/ryn-cx/get-around-server) — a stateless edge relay
-protected by Cloudflare Access.
+[get-around-server](https://github.com/ryn-cx/get-around-server) — a stateless
+edge relay protected by Cloudflare Access.
 
 ## Tested against the real thing
 

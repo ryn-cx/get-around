@@ -1,13 +1,8 @@
-"""get-around: httpx wrapper with custom proxy support."""
-
 from __future__ import annotations
 
-import base64
 from typing import TYPE_CHECKING, Any, TypedDict, Unpack, overload
 
 import httpx
-from httpx._auth import FunctionAuth
-from httpx._client import USE_CLIENT_DEFAULT, UseClientDefault
 
 from get_around.copy_params import copy_method_params
 
@@ -48,25 +43,8 @@ class _ClientKwargs(TypedDict, total=False):
     default_encoding: str | Callable[[bytes], str]
 
 
-class GetAroundError(Exception):
-    """Raised when the proxy server itself returns an error."""
-
-
-def _build_auth(auth: AuthTypes | UseClientDefault | None) -> httpx.Auth | None:
-    if isinstance(auth, UseClientDefault) or auth is None:
-        return None
-    if isinstance(auth, tuple):
-        return httpx.BasicAuth(username=auth[0], password=auth[1])
-    if isinstance(auth, httpx.Auth):
-        return auth
-    if callable(auth):
-        return FunctionAuth(func=auth)
-    msg = f"Invalid auth argument: {auth!r}"
-    raise TypeError(msg)
-
-
 class GetAround:
-    """HTTP client that routes requests through a proxy server."""
+    """HTTP client that routes requests through a relay server."""
 
     @overload
     def __init__(
@@ -122,62 +100,19 @@ class GetAround:
             msg = "client_secret is required to reach the proxy server"
             raise ValueError(msg)
 
-        # These need to be popped before kwargs is passed to build_request.
-        auth = kwargs.pop("auth", USE_CLIENT_DEFAULT)
-        raw_follow_redirects = kwargs.pop("follow_redirects", USE_CLIENT_DEFAULT)
-        timeout = kwargs.pop("timeout", USE_CLIENT_DEFAULT)
-        request = self.client.build_request(method, url, **kwargs)
+        target = httpx.URL(url)
+        params = kwargs.pop("params", None)
+        if params is not None:
+            target = target.copy_merge_params(params)
 
-        built_auth = (
-            self.client.auth
-            if isinstance(auth, UseClientDefault)
-            else _build_auth(auth)
+        headers = httpx.Headers(kwargs.pop("headers", None))
+        headers["CF-Access-Client-Id"] = self.client_id
+        headers["CF-Access-Client-Secret"] = self.client_secret
+
+        response = self.client.request(
+            method, f"{self.server}?{target}", headers=headers, **kwargs
         )
-        if built_auth:
-            request = next(built_auth.auth_flow(request))
-        request.read()
-
-        # follow_redirects needs to be made serializable.
-        follow_redirects = (
-            self.client.follow_redirects
-            if isinstance(raw_follow_redirects, UseClientDefault)
-            else raw_follow_redirects
-        )
-        proxy_payload: dict[str, Any] = {
-            "url": str(request.url),
-            "method": request.method,
-            "headers": dict(request.headers),
-            "body": base64.b64encode(request.content).decode("ascii"),
-            "followRedirects": follow_redirects,
-        }
-
-        proxy_response = self.client.post(
-            self.server,
-            json=proxy_payload,
-            headers={
-                "CF-Access-Client-Id": self.client_id,
-                "CF-Access-Client-Secret": self.client_secret,
-            },
-            timeout=timeout,
-        )
-
-        # Raise on internal get-around-server errors.
-        if proxy_response.status_code != 200:  # noqa: PLR2004
-            msg = f"Proxy error: {proxy_response.status_code}"
-            raise GetAroundError(msg)
-
-        proxy_result = proxy_response.json()
-
-        headers = {key: value for key, value in proxy_result["headers"].items()}
-
-        # Recreate the response from get-around-server.
-        response = httpx.Response(
-            status_code=proxy_result["statusCode"],
-            content=base64.b64decode(proxy_result["body"]),
-            headers=headers,
-            request=request,
-        )
-        response.elapsed = proxy_response.elapsed
+        response.request.url = target
         return response
 
     @copy_method_params(httpx.Client.request)

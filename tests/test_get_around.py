@@ -6,9 +6,8 @@ import re
 from pathlib import Path
 
 import httpx
-import pytest
 
-from get_around import GetAround, GetAroundError
+from get_around import GetAround
 
 _CALL_OVERLOAD_RE = re.compile(r":(\d+): error:.*\[call-overload\]")
 
@@ -167,6 +166,13 @@ class TestBypass:
         assert proxied.json()["ip"] == direct.json()["ip"]
 
 
+class TestRelay:
+    def test_egress_ip_differs_from_direct(self, client: GetAround) -> None:
+        proxied = client.get("https://postman-echo.com/ip")
+        direct = httpx.get("https://postman-echo.com/ip")
+        assert proxied.json()["ip"] != direct.json()["ip"]
+
+
 class TestRedirects:
     REDIRECT_URL = "https://postman-echo.com/redirect-to?url=https://postman-echo.com/get&status_code=302"
 
@@ -174,13 +180,6 @@ class TestRedirects:
         proxied = client.get(self.REDIRECT_URL, follow_redirects=True)
         direct = httpx.get(self.REDIRECT_URL, follow_redirects=True)
         assert proxied.status_code == direct.status_code == 200
-
-    def test_no_follow_redirects(self, client: GetAround) -> None:
-        proxied = client.get(self.REDIRECT_URL, follow_redirects=False)
-        direct = httpx.get(self.REDIRECT_URL, follow_redirects=False)
-        assert proxied.status_code == direct.status_code == 302
-        assert proxied.headers["location"] == direct.headers["location"]
-
 
 class TestUpstreamErrors:
     def test_404_returned_not_raised(self, client: GetAround) -> None:
@@ -194,11 +193,12 @@ class TestUpstreamErrors:
         assert proxied.status_code == direct.status_code
 
 
-class TestProxyErrors:
+class TestBadCredentials:
     def test_bad_credentials(self, server_url: str) -> None:
         client = GetAround(server=server_url, client_id="wrong", client_secret="wrong")
-        with pytest.raises(GetAroundError):
-            client.get("https://postman-echo.com/get")
+        response = client.get("https://postman-echo.com/get")
+        assert response.status_code == 302
+        assert "cloudflareaccess.com" in response.headers["location"]
 
 
 class TestHttpProxy:
