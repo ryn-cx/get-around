@@ -1,7 +1,7 @@
 [project]
 name = "get-around"
 version = "0.1.0"
-description = "httpx wrapper with custom proxy support"
+description = "httpx wrapper with custom relay support"
 readme = "README.md"
 authors = [
     { name = "ryn-cx", email = "262888154+ryn-cx@users.noreply.github.com" }

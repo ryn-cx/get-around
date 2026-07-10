@@ -11,7 +11,9 @@ requests through a cloudflare worker based relay server.
 The `server` you pass to `GetAround` is a cloudflare worker running
 [ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server) and
 the `client_id` and `client_secret` are the Cloudflare Access service tokens used to reach
-the worker. For more information see
+the worker. If your worker isn't protected by Cloudflare Access, omit `client_id` and
+`client_secret` and requests are sent without the service-token headers. For more
+information see
 [ryn-cx/get-around-server](https://github.com/ryn-cx/get-around-server).
 
 ## Installation

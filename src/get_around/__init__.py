@@ -56,6 +56,8 @@ class GetAround:
         **kwargs: Unpack[_ClientKwargs],
     ) -> None: ...
     @overload
+    def __init__(self, *, server: str, **kwargs: Unpack[_ClientKwargs]) -> None: ...
+    @overload
     def __init__(self, *, proxy: str, **kwargs: Unpack[_ClientKwargs]) -> None: ...
     @overload
     def __init__(self, **kwargs: Unpack[_ClientKwargs]) -> None: ...
@@ -93,21 +95,21 @@ class GetAround:
         if self.server is None or self.proxy is not None:
             return self.client.request(method, url, **kwargs)
 
-        if self.client_id is None:
-            msg = "client_id is required to reach the proxy server"
-            raise ValueError(msg)
-        if self.client_secret is None:
-            msg = "client_secret is required to reach the proxy server"
-            raise ValueError(msg)
-
         target = httpx.URL(url)
         params = kwargs.pop("params", None)
         if params is not None:
             target = target.copy_merge_params(params)
 
         headers = httpx.Headers(kwargs.pop("headers", None))
-        headers["CF-Access-Client-Id"] = self.client_id
-        headers["CF-Access-Client-Secret"] = self.client_secret
+        if self.client_id is not None or self.client_secret is not None:
+            if self.client_id is None:
+                msg = "client_id is required when client_secret is set"
+                raise ValueError(msg)
+            if self.client_secret is None:
+                msg = "client_secret is required when client_id is set"
+                raise ValueError(msg)
+            headers["CF-Access-Client-Id"] = self.client_id
+            headers["CF-Access-Client-Secret"] = self.client_secret
 
         response = self.client.request(
             method, f"{self.server}?{target}", headers=headers, **kwargs
