@@ -9,7 +9,6 @@ from get_around.copy_params import copy_method_params
 if TYPE_CHECKING:
     import ssl
     from collections.abc import Callable, Mapping
-    from types import TracebackType
 
     from httpx._client import EventHook
     from httpx._types import (
@@ -44,8 +43,6 @@ class _ClientKwargs(TypedDict, total=False):
 
 
 class GetAround:
-    """HTTP client that routes requests through a relay server."""
-
     @overload
     def __init__(
         self,
@@ -76,19 +73,8 @@ class GetAround:
         self.proxy = proxy
         self.client = httpx.Client(proxy=proxy, **kwargs)
 
-    def __enter__(self) -> GetAround:
-        self.client.__enter__()
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        self.client.__exit__(exc_type, exc_value, traceback)
-
     def close(self) -> None:
+        """Close transport and proxies."""
         self.client.close()
 
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
