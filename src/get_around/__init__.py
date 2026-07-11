@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, Unpack, overload
 
 import httpx
+import keyring
 
 from get_around.copy_params import copy_method_params
+
+KEYRING_SERVICE = "get-around"
 
 if TYPE_CHECKING:
     import ssl
@@ -134,3 +138,40 @@ class GetAround:
     @copy_method_params(httpx.Client.options)
     def options(self, url: str, **kwargs: Any) -> httpx.Response:
         return self._request("OPTIONS", url, **kwargs)
+
+
+def _env_file_values(env_file: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not env_file.exists():
+        return values
+    for line in env_file.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def get_credential(
+    name: str,
+    service: str = KEYRING_SERVICE,
+    env_file: Path | None = None,
+) -> str:
+    env_path = env_file if env_file is not None else Path.cwd() / ".env"
+    value = keyring.get_password(service, name) or _env_file_values(env_path).get(name)
+    if value is None:
+        msg = f"Missing credential {name!r}; run: keyring set {service} {name} or set it in the .env file."
+        raise RuntimeError(msg)
+    return value
+
+
+def build_client_automatically(
+    service: str = KEYRING_SERVICE,
+    env_file: Path | None = None,
+) -> GetAround:
+    return GetAround(
+        server=get_credential("GET_AROUND_SERVER", service, env_file),
+        client_id=get_credential("CF_ACCESS_CLIENT_ID", service, env_file),
+        client_secret=get_credential("CF_ACCESS_CLIENT_SECRET", service, env_file),
+    )
