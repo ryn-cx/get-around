@@ -3,24 +3,21 @@ name = "get-around"
 version = "0.1.0"
 description = "httpx wrapper with custom relay support"
 readme = "README.md"
-authors = [
-    { name = "ryn-cx", email = "262888154+ryn-cx@users.noreply.github.com" }
-]
 requires-python = ">=3.14"
-dependencies = [
-    "httpx>=0.28.1",
+authors = [
+  { name = "ryn-cx", email = "262888154+ryn-cx@users.noreply.github.com" }
 ]
-
-[project.optional-dependencies]
-testing = [
-    "keyring>=25.0",
+dependencies = [
+  "httpx>=0.28.1",
+  "keyring>=25.7.0",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
-    "get-around[testing]",
-    "mypy>=2.2.0",
+  "mypy>=2.2.0",
+  "pytest>=8.0",
+  "ruff>=0.15.21",
+  "ty>=0.0.58",
 ]
 
 [build-system]
