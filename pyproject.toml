@@ -23,3 +23,10 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.ruff.lint]
+extend-select = [
+  "D400",  # Checks for docstrings in which the first line does not end in a period.
+  "D401",  # Checks for docstring first lines that are not in an imperative mood.
+  "D404",  # Checks for function docstrings that include the function's signature in the summary line.
+]

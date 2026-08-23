@@ -1,3 +1,4 @@
+# TODO: Validate
 # TODO: Validate File
 """Functions to copy function and method parameters from one function to another."""
 
@@ -24,7 +25,7 @@ def copy_func_params[**Param, RV](
         ) -> str:
             ...
     .. note::
-       Include ``*args`` and ``**kwargs`` in the signature of the decorated
+       Include `*args` and `**kwargs` in the signature of the decorated
        function in order to avoid TypeErrors when the call signature of
        *source_func* changes.
     """
@@ -44,7 +45,7 @@ def copy_method_params[**Param, Arg1, RV](
     """Cast the decorated method's call signature to the source_method's.
 
     Same as :func:`copy_func_params` but intended to be used with methods.
-    It keeps the first argument (``self``/``cls``) of the decorated method.
+    It keeps the first argument (`self`/`cls`) of the decorated method.
     """
 
     def return_func(
