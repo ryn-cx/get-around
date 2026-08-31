@@ -76,6 +76,7 @@ class GetAround:
         self.client_id = client_id
         self.client_secret = client_secret
         self.proxy = proxy
+        kwargs.setdefault("timeout", 30)
         self.client = httpx.Client(proxy=proxy, **kwargs)
 
     def close(self) -> None:
