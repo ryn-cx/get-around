@@ -94,14 +94,20 @@ class GetAround:
 
     # TODO: Validate
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        """Send the request, reconnecting and retrying once on an SSL error."""
+        """Send the request, reconnecting and retrying once on an SSL error or a 503."""
         try:
-            return self._send(method, url, **kwargs)
+            response = self._send(method, url, **kwargs)
         except httpx.HTTPError as error:
             if not _is_ssl_error(error):
                 raise
             self._reconnect()
             return self._send(method, url, **kwargs)
+
+        if response.status_code == httpx.codes.SERVICE_UNAVAILABLE:
+            self._reconnect()
+            return self._send(method, url, **kwargs)
+
+        return response
 
     # TODO: Validate
     def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:

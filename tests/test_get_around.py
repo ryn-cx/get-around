@@ -255,3 +255,61 @@ class TestSSLRetry:
             client.get("https://example.com")
 
         assert transport.request_count == 1
+
+
+# TODO: Validate
+class ServiceUnavailableTransport(httpx.BaseTransport):
+    """Transport that answers 503 for its first `failures` requests."""
+
+    # TODO: Validate
+    def __init__(self, failures: int) -> None:
+        self.remaining_failures = failures
+        self.request_count = 0
+
+    # TODO: Validate
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.request_count += 1
+        if self.remaining_failures > 0:
+            self.remaining_failures -= 1
+            return httpx.Response(503)
+        return httpx.Response(200, json={"ok": True})
+
+
+class TestServiceUnavailableRetry:
+    # TODO: Validate
+    def test_reconnects_and_retries_once(self) -> None:
+        transport = ServiceUnavailableTransport(failures=1)
+        client = GetAround(transport=transport)
+        first_httpx_client = client.client
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 200
+        assert transport.request_count == 2
+        assert client.client is not first_httpx_client
+
+    # TODO: Validate
+    def test_second_503_is_returned(self) -> None:
+        transport = ServiceUnavailableTransport(failures=2)
+        client = GetAround(transport=transport)
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 503
+        assert transport.request_count == 2
+
+    # TODO: Validate
+    def test_other_error_status_is_not_retried(self) -> None:
+        request_count = 0
+
+        def handle_request(request: httpx.Request) -> httpx.Response:
+            nonlocal request_count
+            request_count += 1
+            return httpx.Response(500)
+
+        client = GetAround(transport=httpx.MockTransport(handle_request))
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 500
+        assert request_count == 1
