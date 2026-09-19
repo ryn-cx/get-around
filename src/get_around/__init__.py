@@ -1,6 +1,7 @@
 # TODO: Validate
 from __future__ import annotations
 
+import ssl
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, Unpack, overload
 
@@ -12,7 +13,6 @@ from get_around.copy_params import copy_method_params
 KEYRING_SERVICE = "get-around"
 
 if TYPE_CHECKING:
-    import ssl
     from collections.abc import Callable, Mapping
 
     from httpx._client import EventHook
@@ -48,6 +48,7 @@ class _ClientKwargs(TypedDict, total=False):
 
 
 class GetAround:
+    # TODO: Validate
     @overload
     def __init__(
         self,
@@ -77,13 +78,33 @@ class GetAround:
         self.client_secret = client_secret
         self.proxy = proxy
         kwargs.setdefault("timeout", 30)
+        self.client_kwargs = kwargs
         self.client = httpx.Client(proxy=proxy, **kwargs)
 
+    # TODO: Validate
     def close(self) -> None:
         """Close transport and proxies."""
         self.client.close()
 
+    # TODO: Validate
+    def _reconnect(self) -> None:
+        """Close the current client and open a new one with the same settings."""
+        self.client.close()
+        self.client = httpx.Client(proxy=self.proxy, **self.client_kwargs)
+
+    # TODO: Validate
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """Send the request, reconnecting and retrying once on an SSL error."""
+        try:
+            return self._send(method, url, **kwargs)
+        except httpx.HTTPError as error:
+            if not _is_ssl_error(error):
+                raise
+            self._reconnect()
+            return self._send(method, url, **kwargs)
+
+    # TODO: Validate
+    def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         if self.server is None or self.proxy is not None:
             return self.client.request(method, url, **kwargs)
 
@@ -142,6 +163,20 @@ class GetAround:
         return self._request("OPTIONS", url, **kwargs)
 
 
+# TODO: Validate
+def _is_ssl_error(error: BaseException) -> bool:
+    """Report whether the error or anything that caused it was an SSL error."""
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        if isinstance(current, ssl.SSLError):
+            return True
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+    return False
+
+
+# TODO: Validate
 def _env_file_values(env_file: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if not env_file.exists():

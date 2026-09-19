@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import ssl
 
 import httpx
+import pytest
 
 from get_around import GetAround
 
@@ -189,3 +191,67 @@ class TestClientParameterForwarding:
     def test_forwarding_headers(self) -> None:
         client = GetAround(headers={"X-Custom": "test"})
         assert client.client.headers["X-Custom"] == "test"
+
+
+# TODO: Validate
+class SSLFailingTransport(httpx.BaseTransport):
+    """Transport that raises an SSL connect error for its first `failures` requests."""
+
+    # TODO: Validate
+    def __init__(self, failures: int) -> None:
+        self.remaining_failures = failures
+        self.request_count = 0
+
+    # TODO: Validate
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.request_count += 1
+        if self.remaining_failures > 0:
+            self.remaining_failures -= 1
+            ssl_error = ssl.SSLCertVerificationError(
+                1, "[SSL: CERTIFICATE_VERIFY_FAILED] self-signed certificate"
+            )
+            raise httpx.ConnectError(str(ssl_error)) from ssl_error
+        return httpx.Response(200, json={"ok": True})
+
+
+class TestSSLRetry:
+    # TODO: Validate
+    def test_reconnects_and_retries_once(self) -> None:
+        transport = SSLFailingTransport(failures=1)
+        client = GetAround(transport=transport)
+        first_httpx_client = client.client
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 200
+        assert transport.request_count == 2
+        assert client.client is not first_httpx_client
+
+    # TODO: Validate
+    def test_second_ssl_error_is_raised(self) -> None:
+        transport = SSLFailingTransport(failures=2)
+        client = GetAround(transport=transport)
+
+        with pytest.raises(httpx.ConnectError):
+            client.get("https://example.com")
+
+        assert transport.request_count == 2
+
+    # TODO: Validate
+    def test_non_ssl_error_is_not_retried(self) -> None:
+        class FailingTransport(httpx.BaseTransport):
+            def __init__(self) -> None:
+                self.request_count = 0
+
+            def handle_request(self, request: httpx.Request) -> httpx.Response:
+                self.request_count += 1
+                msg = "connection refused"
+                raise httpx.ConnectError(msg)
+
+        transport = FailingTransport()
+        client = GetAround(transport=transport)
+
+        with pytest.raises(httpx.ConnectError):
+            client.get("https://example.com")
+
+        assert transport.request_count == 1
