@@ -413,3 +413,46 @@ class TestReadErrorRetry:
             client.get("https://example.com")
 
         assert transport.request_count == MAX_RETRIES + 1
+
+
+# TODO: Validate
+class ReadTimeoutTransport(httpx.BaseTransport):
+    """Transport that times out reading the response for its first `failures` requests."""
+
+    # TODO: Validate
+    def __init__(self, failures: int) -> None:
+        self.remaining_failures = failures
+        self.request_count = 0
+
+    # TODO: Validate
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.request_count += 1
+        if self.remaining_failures > 0:
+            self.remaining_failures -= 1
+            timeout_error = TimeoutError("timed out")
+            raise httpx.ReadTimeout(str(timeout_error)) from timeout_error
+        return httpx.Response(200, json={"ok": True})
+
+
+class TestReadTimeoutRetry:
+    # TODO: Validate
+    def test_reconnects_and_retries(self) -> None:
+        transport = ReadTimeoutTransport(failures=MAX_RETRIES)
+        client = GetAround(transport=transport)
+        first_httpx_client = client.client
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 200
+        assert transport.request_count == MAX_RETRIES + 1
+        assert client.client is not first_httpx_client
+
+    # TODO: Validate
+    def test_read_timeout_after_every_retry_is_raised(self) -> None:
+        transport = ReadTimeoutTransport(failures=MAX_RETRIES + 1)
+        client = GetAround(transport=transport)
+
+        with pytest.raises(httpx.ReadTimeout):
+            client.get("https://example.com")
+
+        assert transport.request_count == MAX_RETRIES + 1

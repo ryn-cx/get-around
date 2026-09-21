@@ -178,13 +178,16 @@ class GetAround:
 def _is_retryable_error(error: BaseException) -> bool:
     """Report whether the error or anything that caused it is worth retrying.
 
-    Retryable means an SSL error, a timeout waiting for a connection from the pool, or a
-    read error, all of which a fresh client can get past.
+    Retryable means an SSL error, a timeout waiting for a connection from the pool, a
+    read timeout, or a read error, all of which a fresh client can get past.
     """
     seen: set[int] = set()
     current: BaseException | None = error
     while current is not None and id(current) not in seen:
-        if isinstance(current, ssl.SSLError | httpx.PoolTimeout | httpx.ReadError):
+        if isinstance(
+            current,
+            ssl.SSLError | httpx.PoolTimeout | httpx.ReadTimeout | httpx.ReadError,
+        ):
             return True
         seen.add(id(current))
         current = current.__cause__ or current.__context__
