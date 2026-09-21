@@ -8,7 +8,7 @@ import ssl
 import httpx
 import pytest
 
-from get_around import GetAround
+from get_around import MAX_RETRIES, GetAround
 
 
 def assert_json_responses_match(
@@ -216,26 +216,26 @@ class SSLFailingTransport(httpx.BaseTransport):
 
 class TestSSLRetry:
     # TODO: Validate
-    def test_reconnects_and_retries_once(self) -> None:
-        transport = SSLFailingTransport(failures=1)
+    def test_reconnects_and_retries(self) -> None:
+        transport = SSLFailingTransport(failures=MAX_RETRIES)
         client = GetAround(transport=transport)
         first_httpx_client = client.client
 
         response = client.get("https://example.com")
 
         assert response.status_code == 200
-        assert transport.request_count == 2
+        assert transport.request_count == MAX_RETRIES + 1
         assert client.client is not first_httpx_client
 
     # TODO: Validate
-    def test_second_ssl_error_is_raised(self) -> None:
-        transport = SSLFailingTransport(failures=2)
+    def test_error_after_every_retry_is_raised(self) -> None:
+        transport = SSLFailingTransport(failures=MAX_RETRIES + 1)
         client = GetAround(transport=transport)
 
         with pytest.raises(httpx.ConnectError):
             client.get("https://example.com")
 
-        assert transport.request_count == 2
+        assert transport.request_count == MAX_RETRIES + 1
 
     # TODO: Validate
     def test_non_ssl_error_is_not_retried(self) -> None:
@@ -277,26 +277,26 @@ class ServiceUnavailableTransport(httpx.BaseTransport):
 
 class TestServiceUnavailableRetry:
     # TODO: Validate
-    def test_reconnects_and_retries_once(self) -> None:
-        transport = ServiceUnavailableTransport(failures=1)
+    def test_reconnects_and_retries(self) -> None:
+        transport = ServiceUnavailableTransport(failures=MAX_RETRIES)
         client = GetAround(transport=transport)
         first_httpx_client = client.client
 
         response = client.get("https://example.com")
 
         assert response.status_code == 200
-        assert transport.request_count == 2
+        assert transport.request_count == MAX_RETRIES + 1
         assert client.client is not first_httpx_client
 
     # TODO: Validate
-    def test_second_503_is_returned(self) -> None:
-        transport = ServiceUnavailableTransport(failures=2)
+    def test_503_after_every_retry_is_returned(self) -> None:
+        transport = ServiceUnavailableTransport(failures=MAX_RETRIES + 1)
         client = GetAround(transport=transport)
 
         response = client.get("https://example.com")
 
         assert response.status_code == 503
-        assert transport.request_count == 2
+        assert transport.request_count == MAX_RETRIES + 1
 
     # TODO: Validate
     def test_other_error_status_is_not_retried(self) -> None:
@@ -313,3 +313,46 @@ class TestServiceUnavailableRetry:
 
         assert response.status_code == 500
         assert request_count == 1
+
+
+# TODO: Validate
+class PoolTimeoutTransport(httpx.BaseTransport):
+    """Transport that raises a pool timeout for its first `failures` requests."""
+
+    # TODO: Validate
+    def __init__(self, failures: int) -> None:
+        self.remaining_failures = failures
+        self.request_count = 0
+
+    # TODO: Validate
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.request_count += 1
+        if self.remaining_failures > 0:
+            self.remaining_failures -= 1
+            msg = "timed out waiting for a connection from the pool"
+            raise httpx.PoolTimeout(msg)
+        return httpx.Response(200, json={"ok": True})
+
+
+class TestPoolTimeoutRetry:
+    # TODO: Validate
+    def test_reconnects_and_retries(self) -> None:
+        transport = PoolTimeoutTransport(failures=MAX_RETRIES)
+        client = GetAround(transport=transport)
+        first_httpx_client = client.client
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 200
+        assert transport.request_count == MAX_RETRIES + 1
+        assert client.client is not first_httpx_client
+
+    # TODO: Validate
+    def test_timeout_after_every_retry_is_raised(self) -> None:
+        transport = PoolTimeoutTransport(failures=MAX_RETRIES + 1)
+        client = GetAround(transport=transport)
+
+        with pytest.raises(httpx.PoolTimeout):
+            client.get("https://example.com")
+
+        assert transport.request_count == MAX_RETRIES + 1

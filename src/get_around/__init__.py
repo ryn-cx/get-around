@@ -11,6 +11,7 @@ import keyring
 from get_around.copy_params import copy_method_params
 
 KEYRING_SERVICE = "get-around"
+MAX_RETRIES = 5
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -94,20 +95,24 @@ class GetAround:
 
     # TODO: Validate
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        """Send the request, reconnecting and retrying once on an SSL error or a 503."""
-        try:
-            response = self._send(method, url, **kwargs)
-        except httpx.HTTPError as error:
-            if not _is_ssl_error(error):
-                raise
-            self._reconnect()
-            return self._send(method, url, **kwargs)
+        """Send the request, reconnecting and retrying failures up to MAX_RETRIES times.
 
-        if response.status_code == httpx.codes.SERVICE_UNAVAILABLE:
-            self._reconnect()
-            return self._send(method, url, **kwargs)
+        SSL errors, pool timeouts and 503 responses are retried; anything else is
+        returned or raised as it is.
+        """
+        for _ in range(MAX_RETRIES):
+            try:
+                response = self._send(method, url, **kwargs)
+            except httpx.HTTPError as error:
+                if not _is_retryable_error(error):
+                    raise
+            else:
+                if response.status_code != httpx.codes.SERVICE_UNAVAILABLE:
+                    return response
 
-        return response
+            self._reconnect()
+
+        return self._send(method, url, **kwargs)
 
     # TODO: Validate
     def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
@@ -170,12 +175,16 @@ class GetAround:
 
 
 # TODO: Validate
-def _is_ssl_error(error: BaseException) -> bool:
-    """Report whether the error or anything that caused it was an SSL error."""
+def _is_retryable_error(error: BaseException) -> bool:
+    """Report whether the error or anything that caused it is worth retrying.
+
+    Retryable means an SSL error or a timeout waiting for a connection from the pool,
+    both of which a fresh client can get past.
+    """
     seen: set[int] = set()
     current: BaseException | None = error
     while current is not None and id(current) not in seen:
-        if isinstance(current, ssl.SSLError):
+        if isinstance(current, ssl.SSLError | httpx.PoolTimeout):
             return True
         seen.add(id(current))
         current = current.__cause__ or current.__context__
