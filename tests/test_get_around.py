@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import ssl
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
 
 from get_around import MAX_RETRIES, GetAround
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 def assert_json_responses_match(
@@ -353,6 +357,59 @@ class TestPoolTimeoutRetry:
         client = GetAround(transport=transport)
 
         with pytest.raises(httpx.PoolTimeout):
+            client.get("https://example.com")
+
+        assert transport.request_count == MAX_RETRIES + 1
+
+
+# TODO: Validate
+class ReadErrorTransport(httpx.BaseTransport):
+    """Transport that fails reading the response body for its first `failures` requests."""
+
+    # TODO: Validate
+    def __init__(self, failures: int) -> None:
+        self.remaining_failures = failures
+        self.request_count = 0
+
+    # TODO: Validate
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.request_count += 1
+        if self.remaining_failures > 0:
+            self.remaining_failures -= 1
+            return httpx.Response(200, stream=FailingStream())
+        return httpx.Response(200, json={"ok": True})
+
+
+# TODO: Validate
+class FailingStream(httpx.SyncByteStream):
+    """Response body that raises a read error part way through."""
+
+    # TODO: Validate
+    def __iter__(self) -> Iterator[bytes]:
+        msg = "[Errno 9] Bad file descriptor"
+        raise httpx.ReadError(msg)
+        yield b""
+
+
+class TestReadErrorRetry:
+    # TODO: Validate
+    def test_reconnects_and_retries(self) -> None:
+        transport = ReadErrorTransport(failures=MAX_RETRIES)
+        client = GetAround(transport=transport)
+        first_httpx_client = client.client
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 200
+        assert transport.request_count == MAX_RETRIES + 1
+        assert client.client is not first_httpx_client
+
+    # TODO: Validate
+    def test_read_error_after_every_retry_is_raised(self) -> None:
+        transport = ReadErrorTransport(failures=MAX_RETRIES + 1)
+        client = GetAround(transport=transport)
+
+        with pytest.raises(httpx.ReadError):
             client.get("https://example.com")
 
         assert transport.request_count == MAX_RETRIES + 1
