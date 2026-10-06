@@ -97,14 +97,17 @@ class GetAround:
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         """Send the request, reconnecting and retrying failures up to MAX_RETRIES times.
 
-        SSL errors, pool timeouts and 503 responses are retried; anything else is
-        returned or raised as it is.
+        SSL errors, pool timeouts, read errors, a closed client and 503 responses are
+        retried; anything else is returned or raised as it is.
         """
         for _ in range(MAX_RETRIES):
             try:
                 response = self._send(method, url, **kwargs)
             except httpx.HTTPError as error:
                 if not _is_retryable_error(error):
+                    raise
+            except RuntimeError:
+                if not self.client.is_closed:
                     raise
             else:
                 if response.status_code != httpx.codes.SERVICE_UNAVAILABLE:

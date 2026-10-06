@@ -456,3 +456,51 @@ class TestReadTimeoutRetry:
             client.get("https://example.com")
 
         assert transport.request_count == MAX_RETRIES + 1
+
+
+# TODO: Validate
+class CountingTransport(httpx.BaseTransport):
+    """Transport that answers every request with 200 and counts them."""
+
+    # TODO: Validate
+    def __init__(self) -> None:
+        self.request_count = 0
+
+    # TODO: Validate
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.request_count += 1
+        return httpx.Response(200, json={"ok": True})
+
+
+class TestClosedClientRetry:
+    # TODO: Validate
+    def test_reconnects_and_retries(self) -> None:
+        transport = CountingTransport()
+        client = GetAround(transport=transport)
+        closed_httpx_client = client.client
+        client.close()
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 200
+        assert transport.request_count == 1
+        assert client.client is not closed_httpx_client
+
+    # TODO: Validate
+    def test_other_runtime_error_is_not_retried(self) -> None:
+        class RuntimeErrorTransport(httpx.BaseTransport):
+            def __init__(self) -> None:
+                self.request_count = 0
+
+            def handle_request(self, request: httpx.Request) -> httpx.Response:
+                self.request_count += 1
+                msg = "something else went wrong"
+                raise RuntimeError(msg)
+
+        transport = RuntimeErrorTransport()
+        client = GetAround(transport=transport)
+
+        with pytest.raises(RuntimeError):
+            client.get("https://example.com")
+
+        assert transport.request_count == 1
