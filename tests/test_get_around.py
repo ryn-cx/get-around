@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from get_around import MAX_RETRIES, GetAround
+from get_around import MAX_RETRIES, GetAround, RateLimit
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -504,3 +504,93 @@ class TestClosedClientRetry:
             client.get("https://example.com")
 
         assert transport.request_count == 1
+
+
+# TODO: Validate
+class FakeClock:
+    """Clock that only moves forward when something sleeps."""
+
+    # TODO: Validate
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    # TODO: Validate
+    def monotonic(self) -> float:
+        return self.now
+
+    # TODO: Validate
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+# TODO: Validate
+@pytest.fixture
+def fake_clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
+    clock = FakeClock()
+    monkeypatch.setattr("get_around.time.monotonic", clock.monotonic)
+    monkeypatch.setattr("get_around.time.sleep", clock.sleep)
+    return clock
+
+
+class TestRateLimit:
+    # TODO: Validate
+    def test_requests_within_limit_do_not_wait(self, fake_clock: FakeClock) -> None:
+        transport = CountingTransport()
+        client = GetAround(transport=transport, rate_limit=RateLimit(3, 10))
+
+        for _ in range(3):
+            client.get("https://example.com")
+
+        assert transport.request_count == 3
+        assert fake_clock.sleeps == []
+
+    # TODO: Validate
+    def test_request_over_limit_waits_for_period(self, fake_clock: FakeClock) -> None:
+        transport = CountingTransport()
+        client = GetAround(transport=transport, rate_limit=RateLimit(2, 10))
+
+        client.get("https://example.com")
+        fake_clock.now += 4
+        client.get("https://example.com")
+        client.get("https://example.com")
+
+        assert transport.request_count == 3
+        assert fake_clock.sleeps == [6]
+
+    # TODO: Validate
+    def test_requests_after_period_do_not_wait(self, fake_clock: FakeClock) -> None:
+        transport = CountingTransport()
+        client = GetAround(transport=transport, rate_limit=RateLimit(1, 5))
+
+        client.get("https://example.com")
+        fake_clock.now += 5
+        client.get("https://example.com")
+
+        assert fake_clock.sleeps == []
+
+    # TODO: Validate
+    def test_retries_count_toward_limit(self, fake_clock: FakeClock) -> None:
+        transport = ServiceUnavailableTransport(failures=1)
+        client = GetAround(transport=transport, rate_limit=RateLimit(1, 3))
+
+        response = client.get("https://example.com")
+
+        assert response.status_code == 200
+        assert fake_clock.sleeps == [3]
+
+    # TODO: Validate
+    def test_no_rate_limit_never_waits(self, fake_clock: FakeClock) -> None:
+        client = GetAround(transport=CountingTransport())
+
+        for _ in range(10):
+            client.get("https://example.com")
+
+        assert fake_clock.sleeps == []
+
+    # TODO: Validate
+    @pytest.mark.parametrize(("requests", "period"), [(0, 1), (1, 0), (1, -1)])
+    def test_invalid_rate_limit_is_rejected(self, requests: int, period: float) -> None:
+        with pytest.raises(ValueError):
+            RateLimit(requests, period)

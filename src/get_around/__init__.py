@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import ssl
+import threading
+import time
+from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, Unpack, overload
 
@@ -48,6 +52,24 @@ class _ClientKwargs(TypedDict, total=False):
     default_encoding: str | Callable[[bytes], str]
 
 
+# TODO: Validate
+@dataclass(frozen=True)
+class RateLimit:
+    """Allow at most `requests` requests in any `period` seconds."""
+
+    requests: int
+    period: float
+
+    # TODO: Validate
+    def __post_init__(self) -> None:
+        if self.requests < 1:
+            msg = "requests must be at least 1"
+            raise ValueError(msg)
+        if self.period <= 0:
+            msg = "period must be greater than 0"
+            raise ValueError(msg)
+
+
 class GetAround:
     # TODO: Validate
     @overload
@@ -57,14 +79,32 @@ class GetAround:
         server: str,
         client_id: str,
         client_secret: str,
+        rate_limit: RateLimit | None = None,
         **kwargs: Unpack[_ClientKwargs],
     ) -> None: ...
     @overload
-    def __init__(self, *, server: str, **kwargs: Unpack[_ClientKwargs]) -> None: ...
+    def __init__(
+        self,
+        *,
+        server: str,
+        rate_limit: RateLimit | None = None,
+        **kwargs: Unpack[_ClientKwargs],
+    ) -> None: ...
     @overload
-    def __init__(self, *, proxy: str, **kwargs: Unpack[_ClientKwargs]) -> None: ...
+    def __init__(
+        self,
+        *,
+        proxy: str,
+        rate_limit: RateLimit | None = None,
+        **kwargs: Unpack[_ClientKwargs],
+    ) -> None: ...
     @overload
-    def __init__(self, **kwargs: Unpack[_ClientKwargs]) -> None: ...
+    def __init__(
+        self,
+        *,
+        rate_limit: RateLimit | None = None,
+        **kwargs: Unpack[_ClientKwargs],
+    ) -> None: ...
     def __init__(
         self,
         *,
@@ -72,12 +112,18 @@ class GetAround:
         client_id: str | None = None,
         client_secret: str | None = None,
         proxy: str | None = None,
+        rate_limit: RateLimit | None = None,
         **kwargs: Unpack[_ClientKwargs],
     ) -> None:
         self.server = server
         self.client_id = client_id
         self.client_secret = client_secret
         self.proxy = proxy
+        self.rate_limit = rate_limit
+        self._request_times: deque[float] = deque(
+            maxlen=rate_limit.requests if rate_limit is not None else None
+        )
+        self._rate_limit_lock = threading.Lock()
         kwargs.setdefault("timeout", 30)
         self.client_kwargs = kwargs
         self.client = httpx.Client(proxy=proxy, **kwargs)
@@ -118,7 +164,22 @@ class GetAround:
         return self._send(method, url, **kwargs)
 
     # TODO: Validate
+    def _wait_for_rate_limit(self) -> None:
+        """Sleep until another request fits within the rate limit, then record it."""
+        if self.rate_limit is None:
+            return
+        with self._rate_limit_lock:
+            if len(self._request_times) == self._request_times.maxlen:
+                wait_seconds = (
+                    self._request_times[0] + self.rate_limit.period - time.monotonic()
+                )
+                if wait_seconds > 0:
+                    time.sleep(wait_seconds)
+            self._request_times.append(time.monotonic())
+
+    # TODO: Validate
     def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        self._wait_for_rate_limit()
         if self.server is None or self.proxy is not None:
             return self.client.request(method, url, **kwargs)
 
@@ -224,12 +285,15 @@ def get_credential(
     return value
 
 
+# TODO: Validate
 def build_client_automatically(
     service: str = KEYRING_SERVICE,
     env_file: Path | None = None,
+    rate_limit: RateLimit | None = None,
 ) -> GetAround:
     return GetAround(
         server=get_credential("GET_AROUND_SERVER", service, env_file),
         client_id=get_credential("CF_ACCESS_CLIENT_ID", service, env_file),
         client_secret=get_credential("CF_ACCESS_CLIENT_SECRET", service, env_file),
+        rate_limit=rate_limit,
     )

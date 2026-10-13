@@ -44,5 +44,14 @@ response = client.head("https://postman-echo.com/get")
 response = client.options("https://postman-echo.com/get")
 response = client.request("GET", "https://postman-echo.com/get")
 
+# Respect a rate limit, here at most 10 requests in any 60 seconds. Retries count
+# toward the limit.
+from get_around import RateLimit
+
+client = GetAround(
+    server="https://<your-worker>.workers.dev",
+    rate_limit=RateLimit(requests=10, period=60),
+)
+
 
 ```
