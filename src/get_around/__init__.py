@@ -1,16 +1,18 @@
 # TODO: Validate
 from __future__ import annotations
 
+import hashlib
 import ssl
+import tempfile
 import threading
 import time
-from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, Unpack, overload
 
 import httpx
 import keyring
+from filelock import FileLock
 
 from get_around.copy_params import copy_method_params
 
@@ -105,6 +107,7 @@ class GetAround:
         rate_limit: RateLimit | None = None,
         **kwargs: Unpack[_ClientKwargs],
     ) -> None: ...
+    # TODO: Validate
     def __init__(
         self,
         *,
@@ -120,10 +123,14 @@ class GetAround:
         self.client_secret = client_secret
         self.proxy = proxy
         self.rate_limit = rate_limit
-        self._request_times: deque[float] = deque(
-            maxlen=rate_limit.requests if rate_limit is not None else None
+        relay = server or proxy or "direct"
+        self._request_times_path = Path(tempfile.gettempdir()) / (
+            f"get-around-{hashlib.sha256(relay.encode()).hexdigest()[:16]}.times"
         )
         self._rate_limit_lock = threading.Lock()
+        self._rate_limit_file_lock = FileLock(
+            self._request_times_path.with_suffix(".lock")
+        )
         kwargs.setdefault("timeout", 30)
         self.client_kwargs = kwargs
         self.client = httpx.Client(proxy=proxy, **kwargs)
@@ -168,14 +175,28 @@ class GetAround:
         """Sleep until another request fits within the rate limit, then record it."""
         if self.rate_limit is None:
             return
-        with self._rate_limit_lock:
-            if len(self._request_times) == self._request_times.maxlen:
-                wait_seconds = (
-                    self._request_times[0] + self.rate_limit.period - time.monotonic()
+        with self._rate_limit_lock, self._rate_limit_file_lock:
+            request_times = (
+                [float(line) for line in self._request_times_path.read_text().split()]
+                if self._request_times_path.exists()
+                else []
+            )
+            if len(request_times) >= self.rate_limit.requests:
+                wait_seconds = min(
+                    request_times[-self.rate_limit.requests]
+                    + self.rate_limit.period
+                    - time.time(),
+                    self.rate_limit.period,
                 )
                 if wait_seconds > 0:
                     time.sleep(wait_seconds)
-            self._request_times.append(time.monotonic())
+            request_times.append(time.time())
+            self._request_times_path.write_text(
+                "\n".join(
+                    str(request_time)
+                    for request_time in request_times[-self.rate_limit.requests :]
+                )
+            )
 
     # TODO: Validate
     def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:

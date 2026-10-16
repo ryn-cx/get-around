@@ -13,6 +13,7 @@ from get_around import MAX_RETRIES, GetAround, RateLimit
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 
 def assert_json_responses_match(
@@ -516,7 +517,7 @@ class FakeClock:
         self.sleeps: list[float] = []
 
     # TODO: Validate
-    def monotonic(self) -> float:
+    def time(self) -> float:
         return self.now
 
     # TODO: Validate
@@ -527,9 +528,10 @@ class FakeClock:
 
 # TODO: Validate
 @pytest.fixture
-def fake_clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
+def fake_clock(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeClock:
     clock = FakeClock()
-    monkeypatch.setattr("get_around.time.monotonic", clock.monotonic)
+    monkeypatch.setattr("get_around.tempfile.gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr("get_around.time.time", clock.time)
     monkeypatch.setattr("get_around.time.sleep", clock.sleep)
     return clock
 

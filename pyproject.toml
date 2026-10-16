@@ -8,6 +8,7 @@ authors = [
   { name = "ryn-cx", email = "262888154+ryn-cx@users.noreply.github.com" }
 ]
 dependencies = [
+  "filelock>=3.32.4",
   "httpx>=0.28.1",
   "keyring>=25.7.0",
 ]
